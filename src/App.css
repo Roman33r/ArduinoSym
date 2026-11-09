@@ -179,7 +179,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .pin-socket { fill: #d7bf83; stroke: #172f35; stroke-width: 1.3; }
 .board-pin:hover .pin-socket, .board-pin.is-draft .pin-socket { fill: #f4cf5a; stroke: var(--teal-dark); stroke-width: 2; }
 .board-pin.is-active .pin-socket { fill: #ffcf45; filter: drop-shadow(0 0 4px #ffd65c); }
-.pin-label { fill: #d0e7dc; font-size: 7.5px; font-weight: 600; }
+.pin-label { fill: #20373c; font-size: 7.5px; font-weight: 700; }
 .rail-label { fill: #7c6c5d; font-size: 13px; font-weight: 700; }
 .row-number, .column-label { fill: #9c9b90; font: 7px 'IBM Plex Mono', monospace; }
 .component-hit-area { fill: transparent; }
