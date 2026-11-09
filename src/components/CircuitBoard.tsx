@@ -339,7 +339,7 @@ export default function CircuitBoard({
           return <g key={pin} className={`board-pin ${active ? 'is-active' : ''} ${draft ? 'is-draft' : ''} ${highlightedNet?.has(pin) ? 'is-net-highlight' : ''}`} onMouseEnter={() => setHoveredEndpoint(pin)} onMouseLeave={() => setHoveredEndpoint(null)} onClick={(event) => { event.stopPropagation(); onEndpoint(pin) }}>
             <circle cx={point.x} cy={point.y} r="10" fill="transparent" />
             <circle cx={point.x} cy={point.y} r={draft ? 6 : 4.5} className="pin-socket" />
-            <text x={point.x} y={point.y + (pin.startsWith('D') ? -12 : 23)} textAnchor="middle" className="pin-label">{pin}</text>
+            <text x={point.x} y={point.y + (pin.startsWith('D') ? -20 : 23)} textAnchor="middle" className="pin-label">{pin}</text>
           </g>
         })}
       </g>
