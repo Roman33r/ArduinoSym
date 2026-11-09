@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/state": "^6.7.6",
     "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.43.15",
     "@fontsource/golos-text": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@hookform/resolvers": "^5.2.2",

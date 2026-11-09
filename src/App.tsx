@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import {
   Activity,
   BookOpen,
@@ -33,6 +33,8 @@ import {
 } from 'lucide-react'
 import CircuitBoard, { type Selection } from './components/CircuitBoard'
 import CodePanel from './components/CodePanel'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './components/ui/resizable'
+import { useDefaultLayout } from 'react-resizable-panels'
 import LessonsView from './components/LessonsView'
 import { EXPERIMENTS } from './data/experiments'
 import { AVRRunner, compileSketch } from './lib/avrRunner'
@@ -71,6 +73,39 @@ const COMPONENT_ICONS = {
 
 const INITIAL_CIRCUIT = EXPERIMENTS[0].circuit
 const INITIAL_CODE = EXPERIMENTS[0].code
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const onChange = () => setMatches(mql.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [query])
+  return matches
+}
+
+function LayoutGroup({ desktop, children }: { desktop: boolean; children: ReactNode }) {
+  const { defaultLayout, onLayoutChange } = useDefaultLayout({ id: 'lab-layout-v1', panelIds: ['parts', 'circuit', 'code'], storage: localStorage })
+  if (!desktop) return <>{children}</>
+  return (
+    <ResizablePanelGroup orientation="horizontal" defaultLayout={defaultLayout} onLayoutChange={onLayoutChange} className="lab-panels-desktop">
+      {children}
+    </ResizablePanelGroup>
+  )
+}
+
+type LayoutPanelProps = { desktop: boolean; children: ReactNode } & Omit<ComponentProps<typeof ResizablePanel>, 'children'>
+
+function LayoutPanel({ desktop, children, ...panelProps }: LayoutPanelProps) {
+  if (!desktop) return <>{children}</>
+  return <ResizablePanel className="lab-rp" {...panelProps}>{children}</ResizablePanel>
+}
+
+function LayoutHandle({ desktop }: { desktop: boolean }) {
+  if (!desktop) return null
+  return <ResizableHandle className="lab-resize-handle" aria-label="Изменить ширину панелей" />
+}
 
 function loadCircuit(): CircuitState {
   try {
@@ -114,6 +149,7 @@ export default function App() {
   const [clearOpen, setClearOpen] = useState(false)
   const [completed, setCompleted] = useState<number[]>(loadCompleted)
   const [zoom, setZoom] = useState(() => window.innerWidth < 700 ? 1.55 : 1)
+  const desktop = useMediaQuery('(min-width: 821px)')
   const runnerRef = useRef<AVRRunner | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const compileController = useRef<AbortController | null>(null)
@@ -343,6 +379,8 @@ export default function App() {
         </div>
 
         <main className="lab-layout" id="main">
+          <LayoutGroup desktop={desktop}>
+          <LayoutPanel desktop={desktop} defaultSize="17%" minSize="150px" maxSize="28%" id="parts">
           <aside className={`parts-panel ${mobilePanel === 'parts' ? 'mobile-active' : ''}`} aria-label="Компоненты и эксперименты">
             <div className="side-tabs" role="tablist">
               <button role="tab" aria-selected={leftTab === 'components'} className={leftTab === 'components' ? 'active' : ''} onClick={() => setLeftTab('components')}>Детали</button>
@@ -395,6 +433,9 @@ export default function App() {
               </>}
             </section>
           </aside>
+          </LayoutPanel>
+          <LayoutHandle desktop={desktop} />
+          <LayoutPanel desktop={desktop} defaultSize="52%" minSize="380px" id="circuit">
 
           <section className={`circuit-panel ${mobilePanel === 'circuit' ? 'mobile-active' : ''}`} aria-label="Редактор электрической схемы">
             <header className="circuit-toolbar">
@@ -430,13 +471,18 @@ export default function App() {
             </div>
             <footer className="circuit-statusbar"><span><Activity size={14} />{circuit.components.length} деталей · {circuit.wires.length} проводов</span><span className={analysis.issues.length ? 'has-issues' : ''}>{analysis.issues.length ? analysis.issues[0] : 'Цепь готова к эксперименту'}</span></footer>
           </section>
+          </LayoutPanel>
+          <LayoutHandle desktop={desktop} />
+          <LayoutPanel desktop={desktop} defaultSize="31%" minSize="300px" maxSize="55%" id="code">
 
           <aside className={`right-panel ${mobilePanel === 'code' ? 'mobile-active' : ''}`}>
-            <CodePanel code={code} serial={serial} running={status === 'running'} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
+            <CodePanel code={code} serial={serial} running={status === 'running'} resizable={desktop} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
             <section className="experiment-brief">
               <span>Задание</span><p>{experiment.task}</p>
             </section>
           </aside>
+          </LayoutPanel>
+          </LayoutGroup>
         </main>
       </>}
 
