@@ -1,6 +1,5 @@
 import { useId, useMemo, useState } from 'react'
 import {
-  BOARD_PINS,
   COLUMN_LETTERS,
   COMPONENT_DEFS,
   componentHoles,
@@ -8,6 +7,7 @@ import {
   getNetEndpoints,
   pinNumber,
 } from '../lib/circuit'
+import { BOARDS, type BoardId } from '../lib/boards'
 import type {
   CircuitAnalysis,
   CircuitComponent,
@@ -22,6 +22,7 @@ interface CircuitBoardProps {
   circuit: CircuitState
   analysis: CircuitAnalysis
   snapshot: RunnerSnapshot
+  board: BoardId
   draftEndpoint: string | null
   selection: Selection
   running: boolean
@@ -31,18 +32,18 @@ interface CircuitBoardProps {
   onWireBend: (id: string, bend?: { x: number; y: number }) => void
 }
 
-function wirePath(from: string, to: string, bend?: { x: number; y: number }) {
-  const start = endpointPoint(from)
-  const end = endpointPoint(to)
+function wirePath(from: string, to: string, board: BoardId, bend?: { x: number; y: number }) {
+  const start = endpointPoint(from, board)
+  const end = endpointPoint(to, board)
   if (bend) return `M ${start.x} ${start.y} Q ${bend.x} ${bend.y}, ${end.x} ${end.y}`
   const distance = Math.max(45, Math.abs(end.x - start.x) * 0.42)
   return `M ${start.x} ${start.y} C ${start.x + distance} ${start.y - 22}, ${end.x - distance} ${end.y - 22}, ${end.x} ${end.y}`
 }
 
-function wireHandlePoint(wire: Wire) {
+function wireHandlePoint(wire: Wire, board: BoardId) {
   if (wire.bend) return wire.bend
-  const start = endpointPoint(wire.from)
-  const end = endpointPoint(wire.to)
+  const start = endpointPoint(wire.from, board)
+  const end = endpointPoint(wire.to, board)
   return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - 33 }
 }
 
@@ -62,7 +63,7 @@ function ComponentVisual({
   onButtonPress: (pressed: boolean) => void
 }) {
   const holes = componentHoles(component)
-  const points = holes.map(endpointPoint)
+  const points = holes.map((hole) => endpointPoint(hole))
   const centerX = (points[0].x + points[points.length - 1].x) / 2
   const width = Math.max(42, points[points.length - 1].x - points[0].x + 25)
   const definition = COMPONENT_DEFS[component.kind]
@@ -193,6 +194,7 @@ export default function CircuitBoard({
   circuit,
   analysis,
   snapshot,
+  board,
   draftEndpoint,
   selection,
   running,
@@ -206,6 +208,7 @@ export default function CircuitBoard({
   const [draggingWire, setDraggingWire] = useState<string | null>(null)
   const rawId = useId()
   const svgId = rawId.replace(/:/g, '')
+  const boardSpec = BOARDS[board]
   const holes = useMemo(() => {
     const result: string[] = []
     for (let row = 1; row <= 30; row += 1) {
@@ -217,9 +220,9 @@ export default function CircuitBoard({
   const selectedWire = selection?.type === 'wire' ? circuit.wires.find((wire) => wire.id === selection.id) : undefined
   const netEndpoint = hoveredEndpoint ?? selectedWire?.from ?? null
   const highlightedNet = useMemo(() => netEndpoint ? getNetEndpoints(circuit, netEndpoint) : null, [circuit, netEndpoint])
-  const draftPath = draftEndpoint ? wirePath(draftEndpoint, `pointer-${svgId}`) : ''
+  const draftPath = draftEndpoint ? wirePath(draftEndpoint, `pointer-${svgId}`, board) : ''
   const actualDraftPath = draftEndpoint ? (() => {
-    const start = endpointPoint(draftEndpoint)
+    const start = endpointPoint(draftEndpoint, board)
     const distance = Math.max(40, Math.abs(pointer.x - start.x) * 0.4)
     return `M ${start.x} ${start.y} C ${start.x + distance} ${start.y - 20}, ${pointer.x - distance} ${pointer.y - 20}, ${pointer.x} ${pointer.y}`
   })() : ''
@@ -230,7 +233,7 @@ export default function CircuitBoard({
       className="circuit-svg"
       viewBox="0 0 1000 570"
       role="group"
-      aria-label="Arduino Uno и макетная плата. Выберите два контакта, чтобы соединить их проводом."
+      aria-label={`${boardSpec.name} и макетная плата. Выберите два контакта, чтобы соединить их проводом.`}
       onPointerMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect()
         const point = { x: (event.clientX - rect.left) / rect.width * 1000, y: (event.clientY - rect.top) / rect.height * 570 }
@@ -244,12 +247,14 @@ export default function CircuitBoard({
       <defs>
         <filter id="soft-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="7" /></filter>
         <linearGradient id="uno-body" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#16878a" /><stop offset="1" stopColor="#0d686e" /></linearGradient>
+        <linearGradient id="esp-body" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#27364e" /><stop offset="1" stopColor="#141c2a" /></linearGradient>
+        <linearGradient id="esp-shield" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#ccd4de" /><stop offset="1" stopColor="#97a2b1" /></linearGradient>
         <pattern id="bench-grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M 24 0 L 0 0 0 24" fill="none" stroke="#d8ded6" strokeWidth="0.55" /></pattern>
       </defs>
       <rect width="1000" height="570" rx="14" fill="#eef0e9" />
       <rect width="1000" height="570" rx="14" fill="url(#bench-grid)" />
 
-      <g className="arduino-board">
+      {board === 'uno' ? <g className="arduino-board">
         <rect x="47" y="139" width="330" height="380" rx="17" fill="#b8c3ba" opacity="0.35" />
         <path d="M40 145 Q40 130 55 130 H355 Q370 130 370 145 V495 Q370 510 355 510 H55 Q40 510 40 495 Z" fill="url(#uno-body)" stroke="#155d61" strokeWidth="2" />
         <rect x="22" y="226" width="54" height="103" rx="6" fill="#aebfc0" stroke="#6e8386" strokeWidth="2" />
@@ -273,7 +278,29 @@ export default function CircuitBoard({
         <text x="331" y="185" fill="#c3e4d7" fontSize="10">L</text>
         <circle cx="103" cy="468" r="5" fill={running ? '#75d69a' : '#668177'} />
         <text x="114" y="472" fill="#c3e4d7" fontSize="9">ON</text>
-      </g>
+      </g> : <g className="arduino-board board-esp32">
+        <rect x="71" y="159" width="292" height="350" rx="16" fill="#9fa8b8" opacity="0.3" />
+        <rect x="64" y="150" width="292" height="350" rx="16" fill="url(#esp-body)" stroke="#0b1220" strokeWidth="2" />
+        <rect x="192" y="132" width="56" height="36" rx="5" fill="#cdd4dc" stroke="#8f99a4" strokeWidth="2" />
+        <rect x="201" y="141" width="38" height="18" rx="2" fill="#7d8894" />
+        <rect x="76" y="172" width="24" height="254" rx="4" fill="#0e141d" />
+        <rect x="320" y="172" width="24" height="318" rx="4" fill="#0e141d" />
+        <rect x="150" y="196" width="120" height="150" rx="6" fill="url(#esp-shield)" stroke="#6d7885" strokeWidth="1.5" />
+        {[210, 222, 234].map((y) => <path key={y} d={`M158 ${y} ` + Array.from({ length: 10 }, (_, k) => `l5 ${k % 2 ? 6 : -6}`).join(' ') + ' l5 0'} fill="none" stroke="#7e8a99" strokeWidth="1.6" />)}
+        <text x="210" y="300" textAnchor="middle" fill="#3d4a5c" fontSize="11" fontWeight="700" fontFamily="IBM Plex Mono, monospace">ESP32</text>
+        <text x="210" y="315" textAnchor="middle" fill="#5a6675" fontSize="7.5" fontFamily="IBM Plex Mono, monospace">WROOM-32</text>
+        <rect x="104" y="156" width="36" height="16" rx="3" fill="#2c3948" stroke="#10161f" />
+        <text x="122" y="167" textAnchor="middle" fontSize="6.5" fill="#aebfcf">BOOT</text>
+        <rect x="280" y="156" width="32" height="16" rx="3" fill="#2c3948" stroke="#10161f" />
+        <text x="296" y="167" textAnchor="middle" fontSize="6.5" fill="#aebfcf">EN</text>
+        <text x="210" y="372" textAnchor="middle" fill="#d5e1f0" fontSize="24" fontWeight="700">ESP32</text>
+        <text x="210" y="392" textAnchor="middle" fill="#93a9c4" fontSize="12" letterSpacing="4">DEVKIT V1</text>
+        <text x="210" y="416" textAnchor="middle" fill="#93a9c4" fontSize="8.5" fontFamily="IBM Plex Mono, monospace">240 MHz · логика 3.3 В</text>
+        <circle cx="96" cy="452" r="4.5" fill={running ? '#e05a4d' : '#6b4a46'} />
+        <text x="106" y="455" fill="#93a9c4" fontSize="7">PWR</text>
+        <circle cx="310" cy="452" r="5" fill={snapshot.pins.duties[2] > 0.01 ? '#5aa9ff' : '#3b4a5c'} className={snapshot.pins.duties[2] > 0.01 ? 'pin-active-glow' : ''} />
+        <text x="300" y="455" textAnchor="end" fill="#93a9c4" fontSize="7">IO2</text>
+      </g>}
 
       <g className="breadboard">
         <rect x="447" y="99" width="570" height="470" rx="17" fill="#b9beb4" opacity="0.35" />
@@ -300,11 +327,11 @@ export default function CircuitBoard({
         {circuit.wires.map((wire: Wire) => {
           const selected = selection?.type === 'wire' && selection.id === wire.id
           const highlighted = highlightedNet?.has(wire.from) || highlightedNet?.has(wire.to)
-          const handle = wireHandlePoint(wire)
+          const handle = wireHandlePoint(wire, board)
           return <g key={wire.id} className={`wire ${selected ? 'is-selected' : ''} ${highlighted ? 'is-net-highlight' : ''}`} onMouseEnter={() => setHoveredEndpoint(wire.from)} onMouseLeave={() => setHoveredEndpoint(null)} onClick={(event) => { event.stopPropagation(); onSelect({ type: 'wire', id: wire.id }) }}>
-            <path d={wirePath(wire.from, wire.to, wire.bend)} fill="none" stroke="transparent" strokeWidth="15" />
-            <path d={wirePath(wire.from, wire.to, wire.bend)} fill="none" stroke="#263b42" strokeOpacity="0.16" strokeWidth="7" transform="translate(0 2)" />
-            <path d={wirePath(wire.from, wire.to, wire.bend)} fill="none" stroke={wire.color} strokeWidth={selected ? 6 : 4.5} strokeLinecap="round" />
+            <path d={wirePath(wire.from, wire.to, board, wire.bend)} fill="none" stroke="transparent" strokeWidth="15" />
+            <path d={wirePath(wire.from, wire.to, board, wire.bend)} fill="none" stroke="#263b42" strokeOpacity="0.16" strokeWidth="7" transform="translate(0 2)" />
+            <path d={wirePath(wire.from, wire.to, board, wire.bend)} fill="none" stroke={wire.color} strokeWidth={selected ? 6 : 4.5} strokeLinecap="round" />
             {selected && <g className="wire-bend-handle" onPointerDown={(event) => {
               event.stopPropagation()
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -330,22 +357,21 @@ export default function CircuitBoard({
         />)}
       </g>
 
-      <g className="board-pins-layer">
-        {BOARD_PINS.map((pin) => {
-          const point = endpointPoint(pin)
-          const number = pinNumber(pin)
+      <g className={`board-pins-layer ${board === 'esp32' ? 'board-pins-esp32' : ''}`}>
+        {boardSpec.pins.map((pin) => {
+          const number = pinNumber(pin.id)
           const active = number !== null && snapshot.pins.duties[number] > 0.05
-          const draft = draftEndpoint === pin
-          return <g key={pin} className={`board-pin ${active ? 'is-active' : ''} ${draft ? 'is-draft' : ''} ${highlightedNet?.has(pin) ? 'is-net-highlight' : ''}`} onMouseEnter={() => setHoveredEndpoint(pin)} onMouseLeave={() => setHoveredEndpoint(null)} onClick={(event) => { event.stopPropagation(); onEndpoint(pin) }}>
-            <circle cx={point.x} cy={point.y} r="10" fill="transparent" />
-            <circle cx={point.x} cy={point.y} r={draft ? 6 : 4.5} className="pin-socket" />
-            <text x={point.x} y={point.y + (pin.startsWith('D') ? -20 : 23)} textAnchor="middle" className="pin-label">{pin}</text>
+          const draft = draftEndpoint === pin.id
+          return <g key={pin.id} className={`board-pin ${active ? 'is-active' : ''} ${draft ? 'is-draft' : ''} ${highlightedNet?.has(pin.id) ? 'is-net-highlight' : ''}`} onMouseEnter={() => setHoveredEndpoint(pin.id)} onMouseLeave={() => setHoveredEndpoint(null)} onClick={(event) => { event.stopPropagation(); onEndpoint(pin.id) }}>
+            <circle cx={pin.x} cy={pin.y} r="10" fill="transparent" />
+            <circle cx={pin.x} cy={pin.y} r={draft ? 6 : 4.5} className="pin-socket" />
+            <text x={pin.x + pin.labelDx} y={pin.y + pin.labelDy} textAnchor={pin.anchor} className="pin-label">{pin.label}</text>
           </g>
         })}
       </g>
 
       <g className="scene-caption">
-        <text x="43" y="548">ARDUINO UNO</text>
+        <text x="43" y="548">{boardSpec.caption}</text>
         <text x="442" y="548">МОНТАЖНАЯ ПЛАТА · 30 РЯДОВ</text>
         <text x="989" y="548" textAnchor="end">{circuit.wires.length} ПРОВОДОВ</text>
       </g>

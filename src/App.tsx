@@ -10,6 +10,7 @@ import {
   CloudSun,
   Code2,
   Copy,
+  Cpu,
   FlaskConical,
   Github,
   Lightbulb,
@@ -37,6 +38,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './componen
 import { useDefaultLayout } from 'react-resizable-panels'
 import LessonsView from './components/LessonsView'
 import { EXPERIMENTS } from './data/experiments'
+import { BOARD_IDS, BOARDS, pinOptionLabel, type BoardId } from './lib/boards'
 import { AVRRunner, compileSketch } from './lib/avrRunner'
 import {
   BOARD_PINS,
@@ -149,6 +151,7 @@ export default function App() {
   const [clearOpen, setClearOpen] = useState(false)
   const [completed, setCompleted] = useState<number[]>(loadCompleted)
   const [zoom, setZoom] = useState(() => window.innerWidth < 700 ? 1.55 : 1)
+  const [board, setBoard] = useState<BoardId>(() => localStorage.getItem('arduino-lab-board') === 'esp32' ? 'esp32' : 'uno')
   const desktop = useMediaQuery('(min-width: 821px)')
   const runnerRef = useRef<AVRRunner | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -157,6 +160,7 @@ export default function App() {
   const clearDialog = useRef<HTMLDialogElement>(null)
 
   const experiment = EXPERIMENTS.find((item) => item.id === experimentId) ?? EXPERIMENTS[0]
+  const boardSpec = BOARDS[board]
   const analysis = useMemo(() => analyzeCircuit(circuit, snapshot), [circuit, snapshot])
   const selectedComponent = selection?.type === 'component' ? circuit.components.find((item) => item.id === selection.id) : undefined
   const selectedWire = selection?.type === 'wire' ? circuit.wires.find((item) => item.id === selection.id) : undefined
@@ -171,6 +175,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('arduino-lab-code', code) }, [code])
   useEffect(() => { localStorage.setItem('arduino-lab-experiment', experimentId) }, [experimentId])
   useEffect(() => { localStorage.setItem('arduino-lab-progress', JSON.stringify(completed)) }, [completed])
+  useEffect(() => { localStorage.setItem('arduino-lab-board', board) }, [board])
   useEffect(() => { runnerRef.current?.updateHardware(analysis) }, [circuit, status])
   useEffect(() => {
     if (helpOpen) helpDialog.current?.showModal()
@@ -192,6 +197,15 @@ export default function App() {
     runnerRef.current = null
     setStatus('idle')
     if (resetPins) setSnapshot(EMPTY_SNAPSHOT)
+  }
+
+  const selectBoard = (next: BoardId) => {
+    if (next === board) return
+    stop()
+    setBoard(next)
+    setSelection(null)
+    setDraftEndpoint(null)
+    notify(`Плата: ${BOARDS[next].name}. ${BOARDS[next].hint}`)
   }
 
   const run = async () => {
@@ -315,7 +329,7 @@ export default function App() {
     if (!draftEndpoint) {
       setDraftEndpoint(endpoint)
       setSelection(null)
-      notify(`${describeEndpoint(endpoint)} — теперь выберите второй контакт`)
+      notify(`${describeEndpoint(endpoint, board)} — теперь выберите второй контакт`)
     } else {
       connect(draftEndpoint, endpoint)
     }
@@ -423,7 +437,7 @@ export default function App() {
                 {selectedComponent.kind === 'button' && <label className="button-hold-control"><input type="checkbox" checked={!!selectedComponent.pressed} onChange={(event) => updateComponent(selectedComponent.id, { pressed: event.target.checked })} /><span>Удерживать кнопку нажатой</span></label>}
                 <div className="component-actions"><button className="duplicate-button" type="button" onClick={duplicateComponent}><Copy size={15} />Дублировать</button><button className="delete-button" type="button" onClick={deleteSelection}><Trash2 size={15} />Удалить</button></div>
               </> : selectedWire ? <>
-                <div className="inspector-title"><span>Соединение</span><strong>{describeEndpoint(selectedWire.from)} → {describeEndpoint(selectedWire.to)}</strong></div>
+                <div className="inspector-title"><span>Соединение</span><strong>{describeEndpoint(selectedWire.from, board)} → {describeEndpoint(selectedWire.to, board)}</strong></div>
                 <p>Перетащите точку на проводе, чтобы изменить изгиб. Двойной щелчок по точке вернёт автоматическую форму.</p>
                 <div className="wire-color-control"><span>Цвет провода</span><div>{WIRE_COLORS.map((color) => <button key={color} type="button" className={selectedWire.color === color ? 'active' : ''} style={{ '--swatch': color } as React.CSSProperties} aria-label={`Цвет провода ${color}`} onClick={() => setCircuit((current) => ({ ...current, wires: current.wires.map((wire) => wire.id === selectedWire.id ? { ...wire, color } : wire) }))} />)}</div></div>
                 <div className="component-actions"><button className="duplicate-button" type="button" onClick={() => setCircuit((current) => ({ ...current, wires: current.wires.map((wire) => wire.id === selectedWire.id ? { ...wire, bend: undefined } : wire) }))}>Автоизгиб</button><button className="delete-button" type="button" onClick={deleteSelection}><Trash2 size={15} />Удалить</button></div>
@@ -440,6 +454,9 @@ export default function App() {
           <section className={`circuit-panel ${mobilePanel === 'circuit' ? 'mobile-active' : ''}`} aria-label="Редактор электрической схемы">
             <header className="circuit-toolbar">
               <div className={`simulation-state state-${status}`}><i />{status === 'running' ? `Выполняется · ${runningTime} с` : status === 'compiling' ? 'Компиляция Arduino CLI' : status === 'error' ? 'Ошибка в программе' : 'Симулятор остановлен'}</div>
+              <div className="board-switch" role="group" aria-label="Выбор платы">
+                {BOARD_IDS.map((id) => <button key={id} type="button" className={board === id ? 'active' : ''} aria-pressed={board === id} title={BOARDS[id].hint} onClick={() => selectBoard(id)}><Cpu size={13} />{BOARDS[id].shortName}</button>)}
+              </div>
               <div className="wire-colors" aria-label="Цвет следующего провода">
                 <button className={wireColor === 'auto' ? 'auto-color active' : 'auto-color'} onClick={() => setWireColor('auto')} type="button">Авто</button>
                 {WIRE_COLORS.map((color) => <button key={color} type="button" className={wireColor === color ? 'active' : ''} style={{ '--swatch': color } as React.CSSProperties} aria-label={`Новый провод: ${color}`} onClick={() => setWireColor(color)} />)}
@@ -448,20 +465,20 @@ export default function App() {
             </header>
             <div className="circuit-stage">
               <div className="circuit-canvas-inner" style={{ width: `${zoom * 100}%` }}>
-                <CircuitBoard circuit={circuit} analysis={analysis} snapshot={snapshot} draftEndpoint={draftEndpoint} selection={selection} running={status === 'running'} onEndpoint={handleEndpoint} onSelect={setSelection} onButtonPress={(id, pressed) => updateComponent(id, { pressed })} onWireBend={(id, bend) => setCircuit((current) => ({ ...current, wires: current.wires.map((wire) => wire.id === id ? { ...wire, bend } : wire) }))} />
+                <CircuitBoard circuit={circuit} analysis={analysis} snapshot={snapshot} board={board} draftEndpoint={draftEndpoint} selection={selection} running={status === 'running'} onEndpoint={handleEndpoint} onSelect={setSelection} onButtonPress={(id, pressed) => updateComponent(id, { pressed })} onWireBend={(id, bend) => setCircuit((current) => ({ ...current, wires: current.wires.map((wire) => wire.id === id ? { ...wire, bend } : wire) }))} />
               </div>
             </div>
             <div className="wire-assistant">
-              <div><Cable size={16} /><span>{draftEndpoint ? `${describeEndpoint(draftEndpoint)} → выберите второй контакт` : 'Нажмите на два контакта или выберите их ниже'}</span>{draftEndpoint && <button type="button" onClick={() => setDraftEndpoint(null)} aria-label="Отменить соединение"><X size={14} /></button>}</div>
+              <div><Cable size={16} /><span>{draftEndpoint ? `${describeEndpoint(draftEndpoint, board)} → выберите второй контакт` : 'Нажмите на два контакта или выберите их ниже'}</span>{draftEndpoint && <button type="button" onClick={() => setDraftEndpoint(null)} aria-label="Отменить соединение"><X size={14} /></button>}</div>
               <form onSubmit={(event) => { event.preventDefault(); if (connect(wireFrom, wireTo)) notify('Провод добавлен') }}>
                 <select value={wireFrom} onChange={(event) => setWireFrom(event.target.value)} aria-label="Начало провода">
-                  <optgroup label="Arduino">{BOARD_PINS.map((pin) => <option key={pin} value={pin}>{pin}</option>)}</optgroup>
+                  <optgroup label={boardSpec.name}>{BOARD_PINS.map((pin) => <option key={pin} value={pin}>{pinOptionLabel(board, pin)}</option>)}</optgroup>
                   <optgroup label="Ряды макетки">{Array.from({ length: 30 }, (_, index) => <option key={index} value={`b${index + 1}`}>Ряд {index + 1} · верхняя группа</option>)}</optgroup>
                   <optgroup label="Дорожки питания"><option value="+1">Плюсовая дорожка</option><option value="-1">Минусовая дорожка</option></optgroup>
                 </select>
                 <span>→</span>
                 <select value={wireTo} onChange={(event) => setWireTo(event.target.value)} aria-label="Конец провода">
-                  <optgroup label="Arduino">{BOARD_PINS.map((pin) => <option key={pin} value={pin}>{pin}</option>)}</optgroup>
+                  <optgroup label={boardSpec.name}>{BOARD_PINS.map((pin) => <option key={pin} value={pin}>{pinOptionLabel(board, pin)}</option>)}</optgroup>
                   <optgroup label="Ряды макетки">{Array.from({ length: 30 }, (_, index) => <option key={index} value={`b${index + 1}`}>Ряд {index + 1} · верхняя группа</option>)}</optgroup>
                   <optgroup label="Нижняя группа">{Array.from({ length: 30 }, (_, index) => <option key={index} value={`f${index + 1}`}>Ряд {index + 1} · нижняя группа</option>)}</optgroup>
                   <optgroup label="Дорожки питания"><option value="+1">Плюсовая дорожка</option><option value="-1">Минусовая дорожка</option></optgroup>
@@ -476,7 +493,7 @@ export default function App() {
           <LayoutPanel desktop={desktop} defaultSize="31%" minSize="300px" maxSize="55%" id="code">
 
           <aside className={`right-panel ${mobilePanel === 'code' ? 'mobile-active' : ''}`}>
-            <CodePanel code={code} serial={serial} running={status === 'running'} resizable={desktop} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
+            <CodePanel code={code} serial={serial} running={status === 'running'} resizable={desktop} boardName={boardSpec.name} chip={boardSpec.chip} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
             <section className="experiment-brief">
               <span>Задание</span><p>{experiment.task}</p>
             </section>
@@ -491,6 +508,7 @@ export default function App() {
         <span className="section-kicker">Быстрый старт</span><h2>Как устроена лаборатория</h2>
         <ol className="help-steps"><li><span>1</span><div><strong>Установите и настройте детали</strong><p>Добавьте компоненты на шесть посадочных мест. Выбранную деталь можно переместить или дублировать в инспекторе.</p></div></li><li><span>2</span><div><strong>Проложите провода</strong><p>Нажмите на два контакта. Наведите курсор на контакт или выберите провод, чтобы подсветить всю цепь. Перетащите квадратную точку на выбранном проводе для ручного изгиба; двойной щелчок вернёт автоформу.</p></div></li><li><span>3</span><div><strong>Напишите программу</strong><p>Используйте digitalWrite(), analogRead(), Serial, библиотеки Servo и DHT. Готовый пример DS18B20 показывает прямой обмен 1-Wire без внешних библиотек.</p></div></li><li><span>4</span><div><strong>Запустите и меняйте условия</strong><p>Во время работы нажимайте кнопку и двигайте ползунки датчиков в инспекторе. Схему можно пересобирать без остановки.</p></div></li></ol>
         <div className="help-note"><Zap size={18} /><p>Эмулируется ATmega328P и его периферия. Аналоговая часть упрощена: полноценный расчёт токов и аналоговых паразитных эффектов не выполняется.</p></div>
+        <div className="help-note"><Cpu size={18} /><p>Переключатель платы над схемой: Arduino Uno R3 или ESP32 DevKit V1. В режиме ESP32 аналоговые входы VP, VN и D32–D35 в коде остаются A0–A5, а программа выполняется на том же совместимом ядре эмуляции.</p></div>
         <button className="run-button" type="button" onClick={() => setHelpOpen(false)}>Понятно, к схеме</button>
       </dialog>
 

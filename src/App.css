@@ -113,7 +113,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .wire-color-control button.active, .wire-colors button.active { box-shadow: 0 0 0 2px var(--ink); }
 
 .circuit-panel { display: flex; flex-direction: column; }
-.circuit-toolbar { min-height: 43px; display: flex; align-items: center; gap: 13px; padding: 6px 11px; border-bottom: 1px solid var(--line); }
+.circuit-toolbar { min-height: 43px; display: flex; flex-wrap: wrap; align-items: center; gap: 13px; padding: 6px 11px; border-bottom: 1px solid var(--line); }
+.board-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.board-switch button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 0; background: transparent; color: var(--muted); font-size: 9.5px; font-weight: 650; cursor: pointer; }
+.board-switch button + button { border-left: 1px solid var(--line); }
+.board-switch button.active { background: var(--teal-soft); color: var(--teal-dark); }
 .simulation-state { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .simulation-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
 .simulation-state.state-running { color: var(--teal-dark); }
@@ -180,6 +184,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .board-pin:hover .pin-socket, .board-pin.is-draft .pin-socket { fill: #f4cf5a; stroke: var(--teal-dark); stroke-width: 2; }
 .board-pin.is-active .pin-socket { fill: #ffcf45; filter: drop-shadow(0 0 4px #ffd65c); }
 .pin-label { fill: #20373c; font-size: 7.5px; font-weight: 700; }
+.board-pins-esp32 .pin-label { fill: #d5e2f2; font-size: 7px; }
+.board-pins-esp32 .pin-socket { fill: #d9c58a; stroke: #0b1220; }
 .rail-label { fill: #7c6c5d; font-size: 13px; font-weight: 700; }
 .row-number, .column-label { fill: #9c9b90; font: 7px 'IBM Plex Mono', monospace; }
 .component-hit-area { fill: transparent; }

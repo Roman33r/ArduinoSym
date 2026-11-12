@@ -1,3 +1,4 @@
+import { describeBoardPin, getBoardPinPoint, type BoardId } from './boards'
 import type {
   BoardPin,
   CircuitAnalysis,
@@ -69,27 +70,12 @@ export function holePoint(id: string): { x: number; y: number } {
   return { x: 485 + (row - 1) * 15.3, y: 240 + column * 27 + bankOffset }
 }
 
-export function boardPinPoint(id: string): { x: number; y: number } {
-  if (/^D\d+$/.test(id)) {
-    const pin = Number(id.slice(1))
-    return { x: 79 + pin * 17, y: 130 }
-  }
-  if (/^A\d+$/.test(id)) {
-    const pin = Number(id.slice(1))
-    return { x: 177 + pin * 28, y: 510 }
-  }
-  const power: Record<string, { x: number; y: number }> = {
-    VIN: { x: 62, y: 510 },
-    GND: { x: 91, y: 510 },
-    '5V': { x: 120, y: 510 },
-    '3V3': { x: 149, y: 510 },
-    RESET: { x: 345, y: 510 },
-  }
-  return power[id] ?? { x: 60, y: 130 }
+export function boardPinPoint(id: string, board: BoardId = 'uno'): { x: number; y: number } {
+  return getBoardPinPoint(board, id) ?? { x: 60, y: 130 }
 }
 
-export function endpointPoint(id: string) {
-  return /^[+-]\d+$/.test(id) || /^[a-j]\d+$/.test(id) ? holePoint(id) : boardPinPoint(id)
+export function endpointPoint(id: string, board: BoardId = 'uno') {
+  return /^[+-]\d+$/.test(id) || /^[a-j]\d+$/.test(id) ? holePoint(id) : boardPinPoint(id, board)
 }
 
 export function pinNumber(id: string): number | null {
@@ -387,11 +373,11 @@ export function isValidEndpoint(endpoint: string): boolean {
     || /^(?:D(?:[0-9]|1[0-3])|A[0-5]|5V|3V3|GND|VIN|RESET)$/.test(endpoint)
 }
 
-export function describeEndpoint(endpoint: string): string {
+export function describeEndpoint(endpoint: string, board: BoardId = 'uno'): string {
   if (/^[a-j]\d+$/.test(endpoint)) return `Отверстие ${endpoint.toUpperCase()}`
   if (endpoint.startsWith('+')) return `Плюсовая дорожка · ${endpoint.slice(1)}`
   if (endpoint.startsWith('-')) return `Минусовая дорожка · ${endpoint.slice(1)}`
-  return `Arduino · ${endpoint}`
+  return describeBoardPin(board, endpoint)
 }
 
 export const BOARD_PINS: BoardPin[] = [

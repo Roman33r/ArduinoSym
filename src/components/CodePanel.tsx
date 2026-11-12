@@ -12,12 +12,14 @@ interface CodePanelProps {
   serial: string
   running: boolean
   resizable: boolean
+  boardName: string
+  chip: string
   onChange: (code: string) => void
   onClearSerial: () => void
   onSendSerial: (text: string) => void
 }
 
-export default function CodePanel({ code, serial, running, resizable, onChange, onClearSerial, onSendSerial }: CodePanelProps) {
+export default function CodePanel({ code, serial, running, resizable, boardName, chip, onChange, onClearSerial, onSendSerial }: CodePanelProps) {
   const [input, setInput] = useState('')
   const outputRef = useRef<HTMLPreElement>(null)
   const { defaultLayout, onLayoutChange } = useDefaultLayout({ id: 'code-panel-split', panelIds: ['editor', 'serial'], storage: localStorage })
@@ -30,7 +32,7 @@ export default function CodePanel({ code, serial, running, resizable, onChange, 
     <section className="editor-section" aria-label="Редактор Arduino-кода">
       <header className="panel-header code-file-header">
         <div><FileCode2 size={16} /><strong>sketch.ino</strong><span>C++</span></div>
-        <span className={running ? 'editor-state is-running' : 'editor-state'}>{running ? 'Выполняется' : 'Arduino Uno'}</span>
+        <span className={running ? 'editor-state is-running' : 'editor-state'}>{running ? 'Выполняется' : boardName}</span>
       </header>
       <div className="editor-wrap">
         <CodeMirror
@@ -51,7 +53,7 @@ export default function CodePanel({ code, serial, running, resizable, onChange, 
           aria-label="Код программы Arduino"
         />
       </div>
-      <footer className="editor-footer"><span>ATmega328P</span><span>{code.split('\n').length} строк</span><span>{running ? 'Перезапустите, чтобы применить правки' : 'Код сохраняется локально'}</span></footer>
+      <footer className="editor-footer"><span>{chip}</span><span>{code.split('\n').length} строк</span><span>{running ? 'Перезапустите, чтобы применить правки' : 'Код сохраняется локально'}</span></footer>
     </section>
   )
 
