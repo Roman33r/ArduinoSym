@@ -78,7 +78,7 @@ export const BOARDS: Record<BoardId, BoardSpec> = {
     shortName: 'ESP32',
     chip: 'ESP32-WROOM-32',
     caption: 'ESP32 DEVKIT',
-    hint: 'Логика 3.3 В. Аналоговые входы VP, VN и D32–D35 — в коде это A0–A5.',
+    hint: 'Логика 3.3 В, код в стиле ESP32: ledcWrite и ESP32Servo. Аналоговые входы VP, VN и D32–D35 — в коде это A0–A5.',
     pins: ESP32_PINS,
   },
 }

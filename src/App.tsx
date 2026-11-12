@@ -39,6 +39,7 @@ import { useDefaultLayout } from 'react-resizable-panels'
 import LessonsView from './components/LessonsView'
 import { EXPERIMENTS } from './data/experiments'
 import { BOARD_IDS, BOARDS, pinOptionLabel, type BoardId } from './lib/boards'
+import { adaptCodeToBoard } from './lib/esp32Compat'
 import { AVRRunner, compileSketch } from './lib/avrRunner'
 import {
   BOARD_PINS,
@@ -161,7 +162,7 @@ export default function App() {
 
   const experiment = EXPERIMENTS.find((item) => item.id === experimentId) ?? EXPERIMENTS[0]
   const boardSpec = BOARDS[board]
-  const analysis = useMemo(() => analyzeCircuit(circuit, snapshot), [circuit, snapshot])
+  const analysis = useMemo(() => analyzeCircuit(circuit, snapshot, board), [circuit, snapshot, board])
   const selectedComponent = selection?.type === 'component' ? circuit.components.find((item) => item.id === selection.id) : undefined
   const selectedWire = selection?.type === 'wire' ? circuit.wires.find((item) => item.id === selection.id) : undefined
 
@@ -203,9 +204,12 @@ export default function App() {
     if (next === board) return
     stop()
     setBoard(next)
+    const targetCode = next === 'esp32' ? (experiment.codeEsp32 ?? experiment.code) : experiment.code
+    const knownVariants = [experiment.code, experiment.codeEsp32].filter(Boolean)
+    setCode(knownVariants.includes(code) ? targetCode : adaptCodeToBoard(code, next))
     setSelection(null)
     setDraftEndpoint(null)
-    notify(`Плата: ${BOARDS[next].name}. ${BOARDS[next].hint}`)
+    notify(`Плата: ${BOARDS[next].name}. Код и подписи датчиков адаптированы.`)
   }
 
   const run = async () => {
@@ -219,11 +223,11 @@ export default function App() {
     const controller = new AbortController()
     compileController.current = controller
     try {
-      const result = await compileSketch(code, controller.signal)
+      const result = await compileSketch(code, controller.signal, board)
       const runner = new AVRRunner(result.hex, (nextSnapshot) => {
         setSnapshot(nextSnapshot)
         if (nextSnapshot.serial) setSerial((current) => `${current}${nextSnapshot.serial}`.slice(-40000))
-      })
+      }, board)
       runnerRef.current = runner
       setSnapshot(EMPTY_SNAPSHOT)
       setSerial('')
@@ -247,7 +251,7 @@ export default function App() {
     stop()
     setExperimentId(id)
     setCircuit(next.circuit)
-    setCode(next.code)
+    setCode(board === 'esp32' ? (next.codeEsp32 ?? next.code) : next.code)
     setSerial('')
     setSelection(null)
     setDraftEndpoint(null)
@@ -493,7 +497,7 @@ export default function App() {
           <LayoutPanel desktop={desktop} defaultSize="31%" minSize="300px" maxSize="55%" id="code">
 
           <aside className={`right-panel ${mobilePanel === 'code' ? 'mobile-active' : ''}`}>
-            <CodePanel code={code} serial={serial} running={status === 'running'} resizable={desktop} boardName={boardSpec.name} chip={boardSpec.chip} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
+            <CodePanel code={code} serial={serial} running={status === 'running'} resizable={desktop} board={board} boardName={boardSpec.name} chip={boardSpec.chip} onChange={setCode} onClearSerial={() => setSerial('')} onSendSerial={(text) => runnerRef.current?.sendSerial(`${text}\n`)} />
             <section className="experiment-brief">
               <span>Задание</span><p>{experiment.task}</p>
             </section>
@@ -508,7 +512,7 @@ export default function App() {
         <span className="section-kicker">Быстрый старт</span><h2>Как устроена лаборатория</h2>
         <ol className="help-steps"><li><span>1</span><div><strong>Установите и настройте детали</strong><p>Добавьте компоненты на шесть посадочных мест. Выбранную деталь можно переместить или дублировать в инспекторе.</p></div></li><li><span>2</span><div><strong>Проложите провода</strong><p>Нажмите на два контакта. Наведите курсор на контакт или выберите провод, чтобы подсветить всю цепь. Перетащите квадратную точку на выбранном проводе для ручного изгиба; двойной щелчок вернёт автоформу.</p></div></li><li><span>3</span><div><strong>Напишите программу</strong><p>Используйте digitalWrite(), analogRead(), Serial, библиотеки Servo и DHT. Готовый пример DS18B20 показывает прямой обмен 1-Wire без внешних библиотек.</p></div></li><li><span>4</span><div><strong>Запустите и меняйте условия</strong><p>Во время работы нажимайте кнопку и двигайте ползунки датчиков в инспекторе. Схему можно пересобирать без остановки.</p></div></li></ol>
         <div className="help-note"><Zap size={18} /><p>Эмулируется ATmega328P и его периферия. Аналоговая часть упрощена: полноценный расчёт токов и аналоговых паразитных эффектов не выполняется.</p></div>
-        <div className="help-note"><Cpu size={18} /><p>Переключатель платы над схемой: Arduino Uno R3 или ESP32 DevKit V1. В режиме ESP32 аналоговые входы VP, VN и D32–D35 в коде остаются A0–A5, а программа выполняется на том же совместимом ядре эмуляции.</p></div>
+        <div className="help-note"><Cpu size={18} /><p>Переключатель платы над схемой: Arduino Uno R3 или ESP32 DevKit V1. В режиме ESP32 примеры используют ledcWrite() и библиотеку ESP32Servo — при запуске они автоматически адаптируются к эмулируемому ядру. Датчики выдают 0–3.3 В, входы VP, VN и D32–D35 в коде остаются A0–A5 (значения 0–1023).</p></div>
         <button className="run-button" type="button" onClick={() => setHelpOpen(false)}>Понятно, к схеме</button>
       </dialog>
 

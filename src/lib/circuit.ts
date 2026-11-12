@@ -185,7 +185,8 @@ function boardPinForNet(root: string, dsu: DisjointSet, allowAnalog = true): num
   return null
 }
 
-export function analyzeCircuit(state: CircuitState, snapshot: RunnerSnapshot): CircuitAnalysis {
+export function analyzeCircuit(state: CircuitState, snapshot: RunnerSnapshot, board: BoardId = 'uno'): CircuitAnalysis {
+  const esp32 = board === 'esp32'
   const dsu = buildNets(state)
   const resistorGraph = buildResistorGraph(state, dsu)
   const root = (endpoint: Endpoint) => dsu.find(endpoint)
@@ -235,15 +236,15 @@ export function analyzeCircuit(state: CircuitState, snapshot: RunnerSnapshot): C
         const outputPin = boardPinForNet(roots[1], dsu)
         if (outputPin !== null && outputPin >= 14) {
           let voltage = 0
-          if (component.kind === 'potentiometer') voltage = component.value / 100 * 5
-          if (component.kind === 'light') voltage = 0.05 + component.value / 100 * 4.75
+          if (component.kind === 'potentiometer') voltage = component.value / 100 * (esp32 ? 3.3 : 5)
+          if (component.kind === 'light') voltage = esp32 ? 0.03 + component.value / 100 * 3.24 : 0.05 + component.value / 100 * 4.75
           if (component.kind === 'temperature') voltage = Math.max(0, Math.min(5, 0.5 + component.value * 0.01))
           analogVoltages[outputPin - 14] = voltage
         } else {
-          issues.push(`${label}: подключите OUT к одному из входов A0–A5.`)
+          issues.push(`${label}: подключите OUT к одному из входов ${esp32 ? 'VP, VN, D32–D35 (A0–A5)' : 'A0–A5'}.`)
         }
       } else {
-        issues.push(`${label}: для питания соедините VCC с 5V, а GND с GND.`)
+        issues.push(`${label}: для питания соедините VCC с ${esp32 ? '3V3' : '5V'}, а GND с GND.`)
       }
     }
 
@@ -315,7 +316,7 @@ export function analyzeCircuit(state: CircuitState, snapshot: RunnerSnapshot): C
           issues.push(`${label}: подключите SIG к цифровому контакту.`)
         }
       } else {
-        issues.push(`${label}: подключите VCC к 5V и GND к GND.`)
+        issues.push(`${label}: подключите VCC к ${esp32 ? '3V3' : '5V'} и GND к GND.`)
       }
     }
 
@@ -334,7 +335,7 @@ export function analyzeCircuit(state: CircuitState, snapshot: RunnerSnapshot): C
           issues.push(`${label}: подключите DATA к цифровому контакту.`)
         }
       } else {
-        issues.push(`${label}: подключите VCC к 5V и GND к GND.`)
+        issues.push(`${label}: подключите VCC к ${esp32 ? '3V3' : '5V'} и GND к GND.`)
       }
     }
   })

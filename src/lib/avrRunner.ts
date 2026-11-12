@@ -17,7 +17,9 @@ import {
   usart0Config,
 } from 'avr8js'
 import { pinName } from './circuit'
+import { esp32CompileSource } from './esp32Compat'
 import { DigitalSensorBus } from './sensorProtocols'
+import type { BoardId } from './boards'
 import type { CircuitAnalysis, PinSnapshot, RunnerSnapshot } from '../types/circuit'
 
 const FLASH = 0x8000
@@ -29,13 +31,13 @@ interface CompileResult {
   stderr: string
 }
 
-export async function compileSketch(source: string, signal?: AbortSignal): Promise<CompileResult> {
+export async function compileSketch(source: string, signal?: AbortSignal, board: BoardId = 'uno'): Promise<CompileResult> {
   const response = await fetch('https://hexi.wokwi.com/build', {
     method: 'POST',
     mode: 'cors',
     cache: 'no-cache',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sketch: source }),
+    body: JSON.stringify({ sketch: board === 'esp32' ? esp32CompileSource(source) : source }),
     signal,
   })
   if (!response.ok) throw new Error(`Сервис компиляции вернул ошибку ${response.status}. Попробуйте ещё раз.`)
@@ -89,9 +91,11 @@ export class AVRRunner {
   private serialInput: number[] = []
   private textDecoder = new TextDecoder()
   private onSnapshot: (snapshot: RunnerSnapshot) => void
+  private board: BoardId
 
-  constructor(hex: string, onSnapshot: (snapshot: RunnerSnapshot) => void) {
+  constructor(hex: string, onSnapshot: (snapshot: RunnerSnapshot) => void, board: BoardId = 'uno') {
     this.onSnapshot = onSnapshot
+    this.board = board
     loadHex(hex, new Uint8Array(this.program.buffer))
     this.cpu = new CPU(this.program)
     new AVRTimer(this.cpu, timer0Config)
@@ -180,7 +184,9 @@ export class AVRRunner {
     this.hardware = hardware
     this.sensorBus.sync(hardware.dht22Sensors, hardware.ds18b20Sensors)
     hardware.analogVoltages.forEach((voltage, channel) => {
-      this.adc.channelValues[channel] = voltage
+      // In ESP32 mode sensors output 0–3.3 V; rescale to the AVR reference so
+      // that `raw * 3.3 / 1023` in the sketch equals the actual voltage.
+      this.adc.channelValues[channel] = this.board === 'esp32' ? voltage * (5 / 3.3) : voltage
     })
     for (let pin = 0; pin < 20; pin += 1) {
       if (this.pins.modes[pin] !== 'output') {

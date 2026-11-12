@@ -4,6 +4,7 @@ import { cpp } from '@codemirror/lang-cpp'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { FileCode2, Send, Terminal, Trash2 } from 'lucide-react'
 import { arduinoAssist } from '../lib/arduinoAssist'
+import type { BoardId } from '../lib/boards'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './ui/resizable'
 import { useDefaultLayout } from 'react-resizable-panels'
 
@@ -12,6 +13,7 @@ interface CodePanelProps {
   serial: string
   running: boolean
   resizable: boolean
+  board: BoardId
   boardName: string
   chip: string
   onChange: (code: string) => void
@@ -19,7 +21,7 @@ interface CodePanelProps {
   onSendSerial: (text: string) => void
 }
 
-export default function CodePanel({ code, serial, running, resizable, boardName, chip, onChange, onClearSerial, onSendSerial }: CodePanelProps) {
+export default function CodePanel({ code, serial, running, resizable, board, boardName, chip, onChange, onClearSerial, onSendSerial }: CodePanelProps) {
   const [input, setInput] = useState('')
   const outputRef = useRef<HTMLPreElement>(null)
   const { defaultLayout, onLayoutChange } = useDefaultLayout({ id: 'code-panel-split', panelIds: ['editor', 'serial'], storage: localStorage })
@@ -39,7 +41,7 @@ export default function CodePanel({ code, serial, running, resizable, boardName,
           value={code}
           height="100%"
           theme={oneDark}
-          extensions={[cpp(), arduinoAssist()]}
+          extensions={[cpp(), arduinoAssist(board)]}
           onChange={onChange}
           basicSetup={{
             lineNumbers: true,

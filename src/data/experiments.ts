@@ -9,6 +9,8 @@ export interface Experiment {
   description: string
   task: string
   code: string
+  /** Вариант программы в стиле ESP32: ledcWrite, ESP32Servo, расчёты под 3.3 В. */
+  codeEsp32?: string
   circuit: CircuitState
 }
 
@@ -100,6 +102,7 @@ export const EXPERIMENTS: Experiment[] = [
     task: 'Поворачивайте ручку на макетке и наблюдайте за значениями. Добавьте светодиод с резистором и управляйте яркостью через analogWrite().',
     circuit: analogCircuit('potentiometer'),
     code: `const int POT_PIN = A0;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(POT_PIN);\n  float volts = raw * 5.0 / 1023.0;\n  Serial.print("ADC: ");\n  Serial.print(raw);\n  Serial.print("  Напряжение: ");\n  Serial.print(volts);\n  Serial.println(" В");\n  delay(300);\n}`,
+    codeEsp32: `const int POT_PIN = A0;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(POT_PIN);\n  float volts = raw * 3.3 / 1023.0;\n  Serial.print("ADC: ");\n  Serial.print(raw);\n  Serial.print("  Напряжение: ");\n  Serial.print(volts);\n  Serial.println(" В");\n  delay(300);\n}`,
   },
   {
     id: 'night-light',
@@ -110,6 +113,7 @@ export const EXPERIMENTS: Experiment[] = [
     task: 'Меняйте освещённость на датчике. Подберите собственный порог и добавьте плавное включение вместо резкого.',
     circuit: nightCircuit,
     code: `const int LIGHT_PIN = A0;\nconst int LED_PIN = 9;\n\nvoid setup() {\n  pinMode(LED_PIN, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int light = analogRead(LIGHT_PIN);\n  int brightness = map(light, 0, 1023, 220, 0);\n  analogWrite(LED_PIN, brightness);\n  Serial.print("Свет: ");\n  Serial.print(light);\n  Serial.print("  Яркость: ");\n  Serial.println(brightness);\n  delay(150);\n}`,
+    codeEsp32: `const int LIGHT_PIN = A0;\nconst int LED_PIN = 9;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int light = analogRead(LIGHT_PIN);\n  int brightness = map(light, 0, 1023, 220, 0);\n  ledcWrite(LED_PIN, brightness);\n  Serial.print("Свет: ");\n  Serial.print(light);\n  Serial.print("  Яркость: ");\n  Serial.println(brightness);\n  delay(150);\n}`,
   },
   {
     id: 'distance',
@@ -130,6 +134,7 @@ export const EXPERIMENTS: Experiment[] = [
     task: 'Измените три аргумента setColor(). Получите фиолетовый, бирюзовый и тёплый белый цвет.',
     circuit: rgbCircuit,
     code: `const int RED_PIN = 9;\nconst int GREEN_PIN = 10;\nconst int BLUE_PIN = 11;\n\nvoid setColor(int red, int green, int blue) {\n  analogWrite(RED_PIN, red);\n  analogWrite(GREEN_PIN, green);\n  analogWrite(BLUE_PIN, blue);\n}\n\nvoid setup() {\n  pinMode(RED_PIN, OUTPUT);\n  pinMode(GREEN_PIN, OUTPUT);\n  pinMode(BLUE_PIN, OUTPUT);\n}\n\nvoid loop() {\n  setColor(255, 70, 0);\n  delay(1200);\n  setColor(0, 180, 220);\n  delay(1200);\n  setColor(160, 0, 255);\n  delay(1200);\n}`,
+    codeEsp32: `const int RED_PIN = 9;\nconst int GREEN_PIN = 10;\nconst int BLUE_PIN = 11;\n\nvoid setColor(int red, int green, int blue) {\n  ledcWrite(RED_PIN, red);\n  ledcWrite(GREEN_PIN, green);\n  ledcWrite(BLUE_PIN, blue);\n}\n\nvoid setup() {\n  pinMode(RED_PIN, OUTPUT);\n  pinMode(GREEN_PIN, OUTPUT);\n  pinMode(BLUE_PIN, OUTPUT);\n}\n\nvoid loop() {\n  setColor(255, 70, 0);\n  delay(1200);\n  setColor(0, 180, 220);\n  delay(1200);\n  setColor(160, 0, 255);\n  delay(1200);\n}`,
   },
   {
     id: 'servo',
@@ -140,6 +145,7 @@ export const EXPERIMENTS: Experiment[] = [
     task: 'Поворачивайте потенциометр и следите за валом сервопривода. Ограничьте диапазон движения от 30 до 120°.',
     circuit: servoCircuit,
     code: `#include <Servo.h>\n\nServo servo;\nconst int POT_PIN = A0;\n\nvoid setup() {\n  servo.attach(9);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(POT_PIN);\n  int angle = map(raw, 0, 1023, 0, 180);\n  servo.write(angle);\n  Serial.print("Угол: ");\n  Serial.println(angle);\n  delay(100);\n}`,
+    codeEsp32: `#include <ESP32Servo.h>\n\nServo servo;\nconst int POT_PIN = A0;\n\nvoid setup() {\n  servo.attach(9);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(POT_PIN);\n  int angle = map(raw, 0, 1023, 0, 180);\n  servo.write(angle);\n  Serial.print("Угол: ");\n  Serial.println(angle);\n  delay(100);\n}`,
   },
   {
     id: 'temperature',
@@ -150,6 +156,7 @@ export const EXPERIMENTS: Experiment[] = [
     task: 'Измените температуру на датчике. Добавьте предупреждение «Жарко!», когда температура превышает 30 °C.',
     circuit: analogCircuit('temperature'),
     code: `const int TEMP_PIN = A0;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(TEMP_PIN);\n  float voltage = raw * 5.0 / 1024.0;\n  float temperature = (voltage - 0.5) * 100.0;\n  Serial.print("Температура: ");\n  Serial.print(temperature);\n  Serial.println(" °C");\n  delay(500);\n}`,
+    codeEsp32: `const int TEMP_PIN = A0;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int raw = analogRead(TEMP_PIN);\n  float voltage = raw * 3.3 / 1024.0;\n  float temperature = (voltage - 0.5) * 100.0;\n  Serial.print("Температура: ");\n  Serial.print(temperature);\n  Serial.println(" °C");\n  delay(500);\n}`,
   },
   {
     id: 'dht22',

@@ -1,6 +1,7 @@
 import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { StateField, type EditorState, type Extension } from '@codemirror/state'
 import { showTooltip, type Tooltip } from '@codemirror/view'
+import type { BoardId } from './boards'
 
 interface ArduinoParam {
   name: string
@@ -267,6 +268,60 @@ const ARDUINO_FUNCTIONS: ArduinoFunction[] = [
   },
 ]
 
+const ESP32_FUNCTIONS: ArduinoFunction[] = [
+  {
+    name: 'ledcWrite',
+    returns: 'void',
+    params: [
+      { name: 'pin', type: 'uint8_t', hint: 'контакт ШИМ, например 9 (Arduino Core 3.x)' },
+      { name: 'duty', type: 'uint32_t', hint: 'скважность 0–255 при разрядности 8 бит' },
+    ],
+    description: 'ШИМ на ESP32 через LEDC. В симуляторе эквивалентно analogWrite().',
+  },
+  {
+    name: 'ledcSetup',
+    returns: 'double',
+    params: [
+      { name: 'channel', type: 'uint8_t', hint: 'канал LEDC 0–15 (Core 2.x)' },
+      { name: 'freq', type: 'double', hint: 'частота ШИМ в герцах, например 5000' },
+      { name: 'resolution', type: 'uint8_t', hint: 'разрядность 1–16 бит, обычно 8' },
+    ],
+    description: 'Настраивает канал ШИМ LEDC (Core 2.x). В симуляторе настройка не требуется.',
+  },
+  {
+    name: 'ledcAttachPin',
+    returns: 'void',
+    params: [
+      { name: 'pin', type: 'uint8_t', hint: 'контакт для вывода ШИМ (Core 2.x)' },
+      { name: 'channel', type: 'uint8_t', hint: 'канал LEDC, настроенный ledcSetup()' },
+    ],
+    description: 'Привязывает канал LEDC к контакту (Core 2.x). В симуляторе не требуется.',
+  },
+  {
+    name: 'ledcDetachPin',
+    returns: 'void',
+    params: [{ name: 'pin', type: 'uint8_t', hint: 'контакт, который нужно освободить' }],
+    description: 'Отключает ШИМ-канал от контакта.',
+  },
+]
+
+function functionsFor(board: BoardId): ArduinoFunction[] {
+  const base = board === 'esp32'
+    ? ARDUINO_FUNCTIONS.map((item) => item.name === 'analogWrite'
+      ? { ...item, description: 'Выдаёт ШИМ-сигнал на контакт. На реальном ESP32 чаще используют ledcWrite().' }
+      : item)
+    : ARDUINO_FUNCTIONS
+  return board === 'esp32' ? [...base, ...ESP32_FUNCTIONS] : base
+}
+
+function constantsFor(board: BoardId): ArduinoConstant[] {
+  return ARDUINO_CONSTANTS.map((item) => {
+    if (item.name === 'LED_BUILTIN' && board === 'esp32') {
+      return { ...item, value: '2', description: 'Встроенный светодиод на GPIO2 (ESP32 DevKit).' }
+    }
+    return item
+  })
+}
 const ARDUINO_CONSTANTS: ArduinoConstant[] = [
   { name: 'HIGH', value: '0x1', description: 'Высокий логический уровень.' },
   { name: 'LOW', value: '0x0', description: 'Низкий логический уровень.' },
@@ -321,20 +376,20 @@ function buildInfoNode(item: ArduinoFunction) {
   return root
 }
 
-function arduinoCompletions(context: CompletionContext): CompletionResult | null {
+function arduinoCompletions(context: CompletionContext, board: BoardId): CompletionResult | null {
   const word = context.matchBefore(/[A-Za-z_][\w.]*$/)
   if (!word && !context.explicit) return null
   const from = word ? word.from : context.pos
 
   const options: Completion[] = [
-    ...ARDUINO_FUNCTIONS.map((item) => ({
+    ...functionsFor(board).map((item) => ({
       label: item.name,
       type: 'function',
       detail: item.returns,
       info: () => buildInfoNode(item),
       boost: 2,
     })),
-    ...ARDUINO_CONSTANTS.map((item) => ({
+    ...constantsFor(board).map((item) => ({
       label: item.name,
       type: 'constant',
       detail: item.value,
@@ -369,18 +424,20 @@ function findCallContext(docText: string, cursor: number) {
   return null
 }
 
-const signatureTooltipField = StateField.define<Tooltip | null>({
-  create: (state) => computeSignatureTooltip(state),
-  update: (_value, transaction) => computeSignatureTooltip(transaction.state),
-  provide: (field) => showTooltip.from(field, (tooltip) => tooltip),
-})
+function makeSignatureTooltipField(functions: ArduinoFunction[]) {
+  return StateField.define<Tooltip | null>({
+    create: (state) => computeSignatureTooltip(state, functions),
+    update: (_value, transaction) => computeSignatureTooltip(transaction.state, functions),
+    provide: (field) => showTooltip.from(field, (tooltip) => tooltip),
+  })
+}
 
-function computeSignatureTooltip(state: EditorState): Tooltip | null {
+function computeSignatureTooltip(state: EditorState, functions: ArduinoFunction[]): Tooltip | null {
   const { head, empty } = state.selection.main
   if (!empty) return null
   const context = findCallContext(state.doc.toString(), head)
   if (!context) return null
-  const item = ARDUINO_FUNCTIONS.find((entry) => entry.name === context.name)
+  const item = functions.find((entry) => entry.name === context.name)
   if (!item || !item.params.length) return null
   const activeParam = Math.min(context.activeParam, item.params.length - 1)
   if (head <= context.openParen || head - context.openParen > 400) return null
@@ -423,6 +480,6 @@ function computeSignatureTooltip(state: EditorState): Tooltip | null {
   }
 }
 
-export function arduinoAssist(): Extension {
-  return [autocompletion({ override: [arduinoCompletions] }), signatureTooltipField]
+export function arduinoAssist(board: BoardId = 'uno'): Extension {
+  return [autocompletion({ override: [(context) => arduinoCompletions(context, board)] }), makeSignatureTooltipField(functionsFor(board))]
 }
